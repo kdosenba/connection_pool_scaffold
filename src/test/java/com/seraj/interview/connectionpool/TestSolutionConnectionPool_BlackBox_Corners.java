@@ -24,7 +24,6 @@ public class TestSolutionConnectionPool_BlackBox_Corners extends
 
 	// The class under test
 	private BlockingConnectionPool classUnderTest;
-
 	@Mock
 	private Connection connection;
 
@@ -78,6 +77,7 @@ public class TestSolutionConnectionPool_BlackBox_Corners extends
 	public void testReleaseConnection_notFromPool_atMax() throws SQLException {
 		connection.close();
 		replayAll();
+
 		classUnderTest.releaseConnection(connection);
 		verifyAll();
 

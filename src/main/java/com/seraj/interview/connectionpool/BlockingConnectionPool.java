@@ -25,10 +25,15 @@ public class BlockingConnectionPool implements ConnectionPool {
 	 * The list of connections sitting idle. The default implementation is an
 	 * unbounded thread-safe {@link LinkedBlockingQueue}.
 	 */
-	private BlockingQueue<Connection> idleConnections = new LinkedBlockingQueue<Connection>();
+	private BlockingQueue<Connection> idleConnections;
 
+	/**
+	 * The default implementation, implicitly invoked by the no args
+	 * constructor, uses a {@link LinkedBlockingQueue} of unbounded size as the
+	 * idle queue.
+	 */
 	public BlockingConnectionPool() {
-
+		idleConnections = new LinkedBlockingQueue<Connection>();
 	}
 
 	/**
@@ -37,6 +42,8 @@ public class BlockingConnectionPool implements ConnectionPool {
 	 * {@link BlockingQueue}.
 	 * 
 	 * @param idleConnectionQueue
+	 *            the concrete {@link BlockingQueue} that will represent the
+	 *            idle connection queue for the pool.
 	 */
 	public BlockingConnectionPool(BlockingQueue<Connection> idleConnectionQueue) {
 		idleConnections = idleConnectionQueue;
@@ -63,7 +70,9 @@ public class BlockingConnectionPool implements ConnectionPool {
 
 	/**
 	 * Releasing a connection places it back into the pool so that it can be
-	 * reused at a future call to {@link ConnectionPool#getConnection()}.
+	 * reused at a future call to {@link ConnectionPool#getConnection()}. If
+	 * there is no space available in the pool to accept the connection, then
+	 * the connection will be closed and ignored.
 	 * 
 	 * @throws IllegalArgumentException
 	 *             When the connection is null.
@@ -72,9 +81,9 @@ public class BlockingConnectionPool implements ConnectionPool {
 	public void releaseConnection(Connection connection) throws SQLException {
 		if (connection == null) {
 			throw new IllegalArgumentException(
-					"Null connections are not accepted.");
+					"A null connection is not valid.");
 		}
-		if (idleConnections.remainingCapacity() == Integer.MAX_VALUE) {
+		if (idleConnections.remainingCapacity() == 0) {
 			connection.close();
 		} else {
 			idleConnections.add(connection);
