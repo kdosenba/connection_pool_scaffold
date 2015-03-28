@@ -67,7 +67,7 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 		replayAll();
 		BlockingQueue<Connection> queue = new LinkedBlockingQueue<Connection>();
 		queue.add(mockConnection);
-		classUnderTest = new BlockingConnectionPool(queue);
+		// classUnderTest = new BlockingConnectionPool(queue);
 
 		Connection connection = classUnderTest.getConnection();
 
@@ -94,7 +94,7 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 		}
 		replayAll();
 
-		classUnderTest = new BlockingConnectionPool(queue);
+		// classUnderTest = new BlockingConnectionPool(queue);
 		classUnderTest.setConnectionFactory(mockFactory);
 
 		List<Connection> returnedConnections = new ArrayList<Connection>();

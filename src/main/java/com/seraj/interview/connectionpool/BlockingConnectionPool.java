@@ -2,10 +2,16 @@ package com.seraj.interview.connectionpool;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.log4j.Logger;
 
 import com.opower.connectionpool.ConnectionPool;
+import com.seraj.interview.configuration.ConfigurationReader;
 
 /**
  * A Thread-safe implementation of {@link ConnectionPool} backed by a
@@ -16,43 +22,53 @@ import com.opower.connectionpool.ConnectionPool;
  */
 public class BlockingConnectionPool implements ConnectionPool {
 
+	// ************************
+	// Required Fields, use setter to initialize
+	// ************************
 	/**
-	 * The factory used to create new connections for the pool.
+	 * The factory used to create new connections for the pool. This is a
+	 * required field.
 	 */
 	private ConnectionFactory connectionFactory;
 
-	/**
-	 * The list of connections sitting idle. The default implementation is an
-	 * unbounded thread-safe {@link LinkedBlockingQueue}.
-	 */
-	private BlockingQueue<Connection> idleConnections;
+	// ************************
+	// Configurable properties
+	// ************************
+	private int maxPoolSize = Integer.MAX_VALUE;
+	private TimeUnit timeUnits = TimeUnit.MILLISECONDS;
+	private long borrowTimeoutInterval = 500;
+	private long leaseTerm = -1;
+	private int validationTimeoutInSeconds = 2;
 
-	/**
-	 * The default implementation, implicitly invoked by the no args
-	 * constructor, uses a {@link LinkedBlockingQueue} of unbounded size as the
-	 * idle queue.
-	 */
+	// ************************
+	// Internal fields
+	// ************************
+	private static final Logger LOG = Logger
+			.getLogger(BlockingConnectionPool.class);
+	// Current size of the pool
+	private AtomicInteger size = new AtomicInteger(0);
+	// The list of connections sitting idle.
+	private BlockingQueue<Connection> idleConnections = new LinkedBlockingQueue<Connection>();
+	// The list of connection on lease.
+	private BlockingQueue<Connection> leasedConnections = new LinkedBlockingQueue<Connection>();
+
+	// ************************
+	// Daemon threads
+	// ************************
+
 	public BlockingConnectionPool() {
-		idleConnections = new LinkedBlockingQueue<Connection>();
+		runDeamonThreads();
+	}
+
+	public BlockingConnectionPool(Properties properties) {
+		ConfigurationReader.loadConfigurations(properties,
+				BlockingConnectionPool.class, this);
+		runDeamonThreads();
 	}
 
 	/**
-	 * An overloaded constructor used to initialize the
-	 * {@link BlockingConnectionPool} with a non-default implementation of a
-	 * {@link BlockingQueue}.
-	 * 
-	 * @param idleConnectionQueue
-	 *            the concrete {@link BlockingQueue} that will represent the
-	 *            idle connection queue for the pool.
-	 */
-	public BlockingConnectionPool(BlockingQueue<Connection> idleConnectionQueue) {
-		idleConnections = idleConnectionQueue;
-	}
-
-	/**
-	 * If an idle connections exist, it will be returned. Otherwise, if capacity
-	 * exists in the pool a new connection is created and returned. Else, the
-	 * functionality is dependent on the idle queue implementation.
+	 * If an idle connections exist, it will be returned. Otherwise, a new
+	 * connection is created and returned.
 	 * 
 	 * @return A {@link Connection}, either created new to meet the demand, or
 	 *         recycled from a previously released connection.
@@ -60,11 +76,13 @@ public class BlockingConnectionPool implements ConnectionPool {
 	 */
 	@Override
 	public Connection getConnection() throws SQLException {
-		if (idleConnections.isEmpty()) {
-			Connection connection = getConnectionFactory().newConnection();
-			idleConnections.add(connection);
-		}
 		Connection connection = idleConnections.poll();
+		while (connection == null) {
+			connection = tryCreateNewConnection();
+			connection = connection == null ? tryBorrowConnection()
+					: connection;
+		}
+		leasedConnections.offer(connection);
 		return connection;
 	}
 
@@ -79,21 +97,68 @@ public class BlockingConnectionPool implements ConnectionPool {
 	 */
 	@Override
 	public void releaseConnection(Connection connection) throws SQLException {
-		if (connection == null) {
-			throw new IllegalArgumentException(
-					"A null connection is not valid.");
+		throwExceptionIfUnknown(connection);
+		leasedConnections.remove(connection);
+		tryRecycleConnection(connection);
+	}
+
+	private void runDeamonThreads() {
+
+	}
+
+	private Connection tryCreateNewConnection() {
+		Connection connection = null;
+		if (size.get() < maxPoolSize) {
+			// Check if multiple threads got past the first if statement.
+			if (size.incrementAndGet() > maxPoolSize) {
+				// Yep! more than one slipped in.
+				size.decrementAndGet();
+			} else {
+				connection = getConnectionFactory().newConnection();
+				LOG.debug("New connection added to the pool.");
+			}
 		}
-		if (idleConnections.remainingCapacity() == 0) {
-			connection.close();
-		} else {
-			idleConnections.add(connection);
+		return connection;
+	}
+
+	private Connection tryBorrowConnection() throws SQLException {
+		Connection connection;
+		try {
+			connection = idleConnections.poll(borrowTimeoutInterval, timeUnits);
+		} catch (InterruptedException e) {
+			Thread.interrupted();
+			throw new SQLException("Pool get connection interupted.", e);
+		}
+		return connection;
+	}
+
+	private void tryRecycleConnection(Connection connection)
+			throws SQLException {
+		if (!connection.isValid(validationTimeoutInSeconds)) {
+			LOG.info("Connection from Thread["
+					+ Thread.currentThread().getName()
+					+ "] is no longer valid. Resource is being released from the pool.");
+		}
+		idleConnections.offer(connection);
+	}
+
+	private void throwExceptionIfUnknown(Connection connection)
+			throws SQLException {
+		if (connection == null) {
+			IllegalArgumentException exception = new IllegalArgumentException(
+					"A null connection is not valid.");
+			throw new SQLException(exception);
+		} else if (!leasedConnections.contains(connection)) {
+			IllegalArgumentException exception = new IllegalArgumentException(
+					"The connection is not recognized by the pool.");
+			throw new SQLException(exception);
 		}
 	}
 
 	/**
 	 * @return the connectionFactory
 	 */
-	public ConnectionFactory getConnectionFactory() {
+	private ConnectionFactory getConnectionFactory() {
 		return connectionFactory;
 	}
 
