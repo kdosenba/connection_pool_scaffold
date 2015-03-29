@@ -8,8 +8,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import org.easymock.EasyMockRunner;
 import org.easymock.EasyMockSupport;
@@ -27,7 +25,7 @@ import com.opower.connectionpool.ConnectionPool;
  * 
  */
 @RunWith(EasyMockRunner.class)
-public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
+public class TestSolutionConnectionPool extends EasyMockSupport {
 
 	// The class under test
 	@TestSubject
@@ -39,12 +37,12 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 
 	/**
 	 * Verify that a {@link Connection} taken from the
-	 * {@link BlockingConnectionPool}, when the pool is empty, is valid.
+	 * {@link BlockingConnectionPool} is valid.
 	 * 
 	 * @throws SQLException
 	 */
 	@Test
-	public void testGetConnection_initialGet() throws SQLException {
+	public void testGetConnection() throws SQLException {
 		expect(mockFactory.newConnection()).andReturn(mockConnection);
 		replayAll();
 
@@ -56,58 +54,30 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 	}
 
 	/**
-	 * Verify that a {@link Connection} taken from the
-	 * {@link BlockingConnectionPool}, when connections already exist in the
-	 * pool, is valid.
+	 * Verify that multiple {@link Connection}s can be returned from the
+	 * {@link BlockingConnectionPool}.
 	 * 
 	 * @throws SQLException
 	 */
 	@Test
-	public void testGetConnection_nonInitialGet() throws SQLException {
-		replayAll();
-		BlockingQueue<Connection> queue = new LinkedBlockingQueue<Connection>();
-		queue.add(mockConnection);
-		// classUnderTest = new BlockingConnectionPool(queue);
-
-		Connection connection = classUnderTest.getConnection();
-
-		verifyAll();
-		assertSame("The expected conneciton was not returned.", mockConnection,
-				connection);
-	}
-
-	/**
-	 * Verify that a {@link Connection} taken from the
-	 * {@link BlockingConnectionPool}, after already existing connections in the
-	 * pool are returned, is valid.
-	 * 
-	 * @throws SQLException
-	 */
-	@Test
-	public void testGetConnection_gettingAllIdleConnections()
-			throws SQLException {
-		expect(mockFactory.newConnection()).andReturn(mockConnection);
+	public void testGetConnection_multiples() throws SQLException {
 		int numInitialConnections = 5;
-		BlockingQueue<Connection> queue = new LinkedBlockingQueue<Connection>();
+		List<Connection> newConnections = new ArrayList<Connection>();
 		for (int i = 0; i < numInitialConnections; ++i) {
-			queue.add(createMock(Connection.class));
+			newConnections.add(createMock(Connection.class));
+			expect(mockFactory.newConnection())
+					.andReturn(newConnections.get(i));
 		}
 		replayAll();
-
-		// classUnderTest = new BlockingConnectionPool(queue);
-		classUnderTest.setConnectionFactory(mockFactory);
 
 		List<Connection> returnedConnections = new ArrayList<Connection>();
 		for (int i = 0; i < numInitialConnections; ++i) {
 			returnedConnections.add(classUnderTest.getConnection());
 		}
-		Connection connection = classUnderTest.getConnection();
 
 		verifyAll();
-		assertTrue("Some initially queueed connection was not returned.",
-				returnedConnections.containsAll(queue));
-		assertSame("The expected conneciton was not returned.", mockConnection,
-				connection);
+		assertTrue("All connections were retrieved.",
+				returnedConnections.containsAll(newConnections));
 	}
 
 	/**
@@ -119,6 +89,7 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 	@Test
 	public void testReleaseConnection() throws SQLException {
 		expect(mockFactory.newConnection()).andReturn(mockConnection);
+		expect(mockConnection.isValid(2)).andReturn(true);
 		replayAll();
 
 		Connection connection = classUnderTest.getConnection();
@@ -136,13 +107,13 @@ public class TestSolutionConnectionPool_BlackBox extends EasyMockSupport {
 	@Test
 	public void testRecycleConnection() throws SQLException {
 		expect(mockFactory.newConnection()).andReturn(mockConnection);
+		expect(mockConnection.isValid(2)).andReturn(true);
 		replayAll();
 
 		Connection connection1 = classUnderTest.getConnection();
 		classUnderTest.releaseConnection(connection1);
 		Connection connection2 = classUnderTest.getConnection();
 
-		verifyAll();
 		assertSame("The connection was not recycled.", connection1, connection2);
 	}
 
