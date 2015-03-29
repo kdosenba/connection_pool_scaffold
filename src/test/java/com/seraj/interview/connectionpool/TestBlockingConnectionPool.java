@@ -19,13 +19,13 @@ import org.junit.runner.RunWith;
 import com.opower.connectionpool.ConnectionPool;
 
 /**
- * Test expectations given black box knowledge of {@link ConnectionPool}
+ * Test standard expectations of a {@link ConnectionPool}
  * 
  * @author Seraj Dosenbach
  * 
  */
 @RunWith(EasyMockRunner.class)
-public class TestSolutionConnectionPool extends EasyMockSupport {
+public class TestBlockingConnectionPool extends EasyMockSupport {
 
 	// The class under test
 	@TestSubject

@@ -25,8 +25,7 @@ import com.opower.connectionpool.ConnectionPool;
  * 
  */
 @RunWith(EasyMockRunner.class)
-public class TestSolutionConnectionPool_Corners extends
-		EasyMockSupport {
+public class TestBlockingConnectionPool_Corners extends EasyMockSupport {
 
 	// The class under test
 	private BlockingConnectionPool classUnderTest;
@@ -88,9 +87,8 @@ public class TestSolutionConnectionPool_Corners extends
 	}
 
 	/**
-	 * Verify that an {@link IllegalArgumentException} is thrown when a
-	 * {@link Connection} not associated with the pool is provided as the
-	 * argument to {@link BlockingConnectionPool#releaseConnection(Connection)}
+	 * Verify that a {@link Connection} that is part of the pool, but is no
+	 * longer in a valid state, is closed and discarded.
 	 * 
 	 * @throws SQLException
 	 */

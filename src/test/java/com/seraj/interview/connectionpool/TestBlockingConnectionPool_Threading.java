@@ -21,7 +21,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(EasyMockRunner.class)
-public class TestSolutionConnectionPool_Threading extends EasyMockSupport {
+public class TestBlockingConnectionPool_Threading extends EasyMockSupport {
 
 	// The class under test
 	private BlockingConnectionPool classUnderTest;
